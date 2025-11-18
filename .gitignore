@@ -1,0 +1,49 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Data files
+data/
+*.db
+*.sqlite
+
+# Screenshots
+screenshots/
+*.jpg
+*.png
+
+# Config files with secrets
+config.local.json
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (for frontend)
+web/node_modules/
+web/dist/
+web/.next/
+
+# Logs
+*.log
+logs/

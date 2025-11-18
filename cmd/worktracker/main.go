@@ -1,0 +1,152 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+
+	"worktracker/internal/ai"
+	"worktracker/internal/capture"
+	"worktracker/internal/config"
+	"worktracker/internal/scheduler"
+	"worktracker/internal/server"
+	"worktracker/internal/singleton"
+	"worktracker/internal/storage"
+	"worktracker/internal/tray"
+	"worktracker/pkg/logger"
+)
+
+const (
+	AppName    = "WorkTracker"
+	AppVersion = "1.0.0"
+)
+
+func main() {
+	// printBanner()
+
+	// 单实例检测 - 防止程序重复启动
+	mutex, err := singleton.EnsureSingleInstance(AppName)
+	if err != nil {
+		// 已有实例在运行，退出
+		os.Exit(1)
+	}
+	// 确保程序退出时释放互斥锁
+	defer mutex.Close()
+
+	// 获取当前工作目录
+	workDir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("❌ 无法获取工作目录: %v", err)
+	}
+
+	// 初始化配置管理器
+	configPath := filepath.Join(workDir, "data", "config.json")
+	configMgr, err := config.NewManager(configPath)
+	if err != nil {
+		log.Fatalf("❌ 初始化配置管理器失败: %v", err)
+	}
+	fmt.Println("✅ 配置管理器初始化完成")
+
+	// 确保必要的目录存在
+	storageCfg := configMgr.GetStorage()
+	requiredDirs := []string{
+		storageCfg.DataDir,
+		filepath.Join(storageCfg.DataDir, "screenshots"),
+		filepath.Join(storageCfg.DataDir, "logs"),
+		filepath.Join(storageCfg.DataDir, "summaries"),
+	}
+	for _, dir := range requiredDirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Fatalf("❌ 创建目录失败 %s: %v", dir, err)
+		}
+	}
+	fmt.Println("✅ 目录结构初始化完成")
+
+	// 初始化日志系统
+	logsDir := filepath.Join(storageCfg.DataDir, "logs")
+	if err := logger.Init(logsDir, false); err != nil {
+		log.Printf("⚠️ 日志系统初始化失败: %v, 使用控制台输出", err)
+	} else {
+		fmt.Println("✅ 日志系统初始化完成")
+		logger.Info("==================== WorkTracker %s 启动 ====================", AppVersion)
+		logger.Info("工作目录: %s", workDir)
+		logger.Info("数据目录: %s", storageCfg.DataDir)
+	}
+
+	// 初始化存储管理器
+	storageMgr, err := storage.NewManager(storageCfg.DataDir)
+	if err != nil {
+		log.Fatalf("❌ 初始化存储管理器失败: %v", err)
+	}
+	fmt.Println("✅ 存储管理器初始化完成")
+
+	// 初始化截屏引擎
+	captureEng := capture.NewEngine(configMgr, storageMgr)
+	fmt.Println("✅ 截屏引擎初始化完成")
+
+	// 初始化 AI 分析器
+	aiAnalyzer := ai.NewAnalyzer(configMgr, storageMgr)
+	fmt.Println("✅ AI 分析器初始化完成")
+
+	// 初始化任务调度器
+	sched := scheduler.NewScheduler(configMgr, storageMgr, aiAnalyzer)
+	if err := sched.Start(); err != nil {
+		log.Fatalf("❌ 启动任务调度器失败: %v", err)
+	}
+
+	// 初始化 Web 服务器
+	webServer := server.NewServer(configMgr, storageMgr, captureEng, aiAnalyzer, AppVersion)
+
+	// 启动 Web 服务器（在独立 goroutine 中）
+	go func() {
+		if err := webServer.Start(); err != nil {
+			log.Printf("❌ Web 服务器错误: %v", err)
+		}
+	}()
+
+	// 获取 Web 地址
+	serverCfg := configMgr.GetServer()
+	webURL := fmt.Sprintf("http://%s:%d", serverCfg.Host, serverCfg.Port)
+
+	// 自动打开浏览器
+	if serverCfg.AutoOpenBrowser {
+		fmt.Printf("🌐 正在打开浏览器: %s\n", webURL)
+		// 延迟一下确保服务器已启动
+		// time.Sleep(1 * time.Second)
+		// 浏览器会在托盘菜单点击时打开
+	}
+
+	// 初始化系统托盘
+	fmt.Println("🎯 启动系统托盘...")
+	trayApp := tray.NewTrayApp(
+		captureEng,
+		sched,
+		webURL,
+		func() {
+			// 清理资源
+			fmt.Println("📦 正在清理资源...")
+			webServer.Shutdown()
+			storageMgr.Close()
+			fmt.Println("✅ 资源清理完成")
+		},
+	)
+
+	// 运行托盘应用（阻塞）
+	trayApp.Run()
+}
+
+// printBanner 打印欢迎信息
+func printBanner() {
+	banner := `
+╔═══════════════════════════════════════════════╗
+║                                               ║
+║     🚀 WorkTracker AI - 工作追踪工具          ║
+║     版本: ` + AppVersion + `                               ║
+║                                               ║
+║     📸 自动截屏 + 🤖 AI 分析 + 📊 时间轴       ║
+║                                               ║
+╚═══════════════════════════════════════════════╝
+`
+	fmt.Println(banner)
+}
