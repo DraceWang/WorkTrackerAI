@@ -1,4 +1,4 @@
-# <img src="asserts\WorkTraceAI.png" alt="WorkTraceAI" style="zoom:3%;" />WorkTracker AI - 智能工作追踪分析工具
+# <img src="https://s2.loli.net/2025/11/18/mrxTlJA9DyckEK1.png" alt="WorkTraceAI" style="zoom:3%;" />WorkTracker AI - 智能工作追踪分析工具
 
 > 通过 AI 自动分析你的工作内容，生成精美的时间轴和活动报告
 >
