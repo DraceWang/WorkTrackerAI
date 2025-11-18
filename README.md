@@ -1,4 +1,4 @@
-# <img src="C:\Users\mixiaojiu\WorkTracker\asserts\WorkTraceAI.png" alt="WorkTraceAI" style="zoom:3%;" />WorkTracker AI - 智能工作追踪分析工具
+# <img src="asserts\WorkTraceAI.png" alt="WorkTraceAI" style="zoom:3%;" />WorkTracker AI - 智能工作追踪分析工具
 
 > 通过 AI 自动分析你的工作内容，生成精美的时间轴和活动报告
 >
@@ -176,31 +176,31 @@ go run cmd/worktracker/main.go
 
 ## ❓ 常见问题
 
-<details>
-<summary><b>Q: 为什么截图不工作？</b></summary>
 
+<summary><b>Q: 为什么截图不工作？</b></summary>
+<details>
 检查：
 1. 是否点击了"开始截屏"
 2. 当前时间是否在工作时间内
 3. 查看控制台是否有错误信息
+</details>
 
-<details>
 <summary><b>Q: AI 分析失败怎么办？</b></summary>
-
+<details>
 可能原因：
 1. API 密钥未配置或错误
 2. 网络连接问题
 3. API 额度不足
 4. 时间段内没有截图
+</details>
 
-<details>
 <summary><b>Q: 如何节省存储空间？</b></summary>
-
+<details>
 调整配置：
 - 提高截图间隔（5-10秒）
 - 降低图片质量（30-45）
 - 减少数据保留天数（7-14天）
-
+</details>
 ---
 
 ## 🔒 隐私说明
