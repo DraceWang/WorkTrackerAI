@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"worktracker/internal/ai"
-	"worktracker/internal/config"
-	"worktracker/internal/storage"
+	"WorkTrackerAI/internal/ai"
+	"WorkTrackerAI/internal/config"
+	"WorkTrackerAI/internal/storage"
 
 	"github.com/robfig/cron/v3"
 )

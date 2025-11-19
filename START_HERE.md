@@ -89,10 +89,6 @@ go version
 2. 申请并获取 API 密钥
 3. 推荐模型: `doubao-vision-pro`
 
-#### Claude (Anthropic)
-1. 访问: https://console.anthropic.com/
-2. 登录或注册账号
-3. 获取 API 密钥
 
 ### ☑️ 步骤 4: 启动程序
 
@@ -100,7 +96,7 @@ go version
 
 预期结果：
 - ✅ 命令行窗口会显示启动信息
-- ✅ 系统托盘出现 WorkTracker 图标
+- ✅ 系统托盘出现 WorkTrackerAI 图标
 - ✅ 浏览器自动打开 http://localhost:9527
 
 ### ☑️ 步骤 5: 配置 AI
@@ -141,8 +137,7 @@ go version
 ### 系统托盘操作
 
 右键点击托盘图标可以：
-- 📊 打开控制面板
-- ▶️ 开始/停止截屏
+- 🌐 打开控制面板
 - 🚪 退出程序
 
 ---

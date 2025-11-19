@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"worktracker/internal/config"
-	"worktracker/internal/storage"
-	"worktracker/pkg/logger"
-	"worktracker/pkg/models"
-	"worktracker/pkg/utils"
+	"WorkTrackerAI/internal/config"
+	"WorkTrackerAI/internal/storage"
+	"WorkTrackerAI/pkg/logger"
+	"WorkTrackerAI/pkg/models"
+	"WorkTrackerAI/pkg/utils"
 
 	"github.com/kbinani/screenshot"
 )

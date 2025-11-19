@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"worktracker/internal/capture"
-	"worktracker/internal/scheduler"
+	"WorkTrackerAI/internal/capture"
+	"WorkTrackerAI/internal/scheduler"
 
 	"github.com/getlantern/systray"
 )

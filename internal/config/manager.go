@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"worktracker/pkg/models"
+	"WorkTrackerAI/pkg/models"
 )
 
 // Manager 配置管理器

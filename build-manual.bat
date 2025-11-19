@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================
-echo   WorkTracker AI - 手动构建脚本
+echo   WorkTraceAI AI - 手动构建脚本
 echo   (适用于依赖下载失败的情况)
 echo ========================================
 echo.
@@ -65,7 +65,7 @@ echo ✅ 依赖下载完成
 echo.
 
 echo [6/6] 编译程序...
-go build -ldflags="-H windowsgui" -o worktracker.exe cmd/worktracker/main.go
+go build -ldflags="-H windowsgui" -o WorkTraceAI.exe cmd/WorkTraceAI/main.go
 if %errorlevel% neq 0 (
     echo ❌ 编译失败
     pause
@@ -78,8 +78,8 @@ echo ========================================
 echo   构建成功! 🎉
 echo ========================================
 echo.
-echo 可执行文件: worktracker.exe
-echo 运行方式: 双击 worktracker.exe 启动
+echo 可执行文件: WorkTraceAI.exe
+echo 运行方式: 双击 WorkTraceAI.exe 启动
 echo.
 echo 注意: 已使用本地克隆的 screenshot 库
 echo.

@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"worktracker/internal/config"
-	"worktracker/internal/storage"
-	"worktracker/pkg/logger"
-	"worktracker/pkg/models"
+	"WorkTrackerAI/internal/config"
+	"WorkTrackerAI/internal/storage"
+	"WorkTrackerAI/pkg/logger"
+	"WorkTrackerAI/pkg/models"
 )
 
 // Analyzer AI 分析器

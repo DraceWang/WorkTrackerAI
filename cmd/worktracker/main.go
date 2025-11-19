@@ -6,21 +6,38 @@ import (
 	"os"
 	"path/filepath"
 
-	"worktracker/internal/ai"
-	"worktracker/internal/capture"
-	"worktracker/internal/config"
-	"worktracker/internal/scheduler"
-	"worktracker/internal/server"
-	"worktracker/internal/singleton"
-	"worktracker/internal/storage"
-	"worktracker/internal/tray"
-	"worktracker/pkg/logger"
+	"WorkTrackerAI/internal/ai"
+	"WorkTrackerAI/internal/capture"
+	"WorkTrackerAI/internal/config"
+	"WorkTrackerAI/internal/scheduler"
+	"WorkTrackerAI/internal/server"
+	"WorkTrackerAI/internal/singleton"
+	"WorkTrackerAI/internal/storage"
+	"WorkTrackerAI/internal/tray"
+	"WorkTrackerAI/pkg/logger"
 )
 
 const (
-	AppName    = "WorkTracker"
+	AppName    = "WorkTrackerAI"
 	AppVersion = "1.0.0"
 )
+
+// getAppDataDir 获取应用数据目录
+// Windows: %LOCALAPPDATA%\worktrackerAIAI
+// 如果环境变量不存在，则使用当前工作目录
+func getAppDataDir() string {
+	// 优先使用 LOCALAPPDATA 环境变量（Windows）
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		return filepath.Join(localAppData, AppName)
+	}
+
+	// 其他平台或环境变量不存在时，使用当前工作目录
+	workDir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("❌ 无法获取工作目录: %v", err)
+	}
+	return workDir
+}
 
 func main() {
 	// printBanner()
@@ -34,14 +51,16 @@ func main() {
 	// 确保程序退出时释放互斥锁
 	defer mutex.Close()
 
-	// 获取当前工作目录
-	workDir, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("❌ 无法获取工作目录: %v", err)
+	// 获取应用数据目录
+	appDataDir := getAppDataDir()
+
+	// 确保应用数据目录存在
+	if err := os.MkdirAll(appDataDir, 0755); err != nil {
+		log.Fatalf("❌ 创建应用数据目录失败 %s: %v", appDataDir, err)
 	}
 
 	// 初始化配置管理器
-	configPath := filepath.Join(workDir, "data", "config.json")
+	configPath := filepath.Join(appDataDir, "data", "config.json")
 	configMgr, err := config.NewManager(configPath)
 	if err != nil {
 		log.Fatalf("❌ 初始化配置管理器失败: %v", err)
@@ -69,8 +88,8 @@ func main() {
 		log.Printf("⚠️ 日志系统初始化失败: %v, 使用控制台输出", err)
 	} else {
 		fmt.Println("✅ 日志系统初始化完成")
-		logger.Info("==================== WorkTracker %s 启动 ====================", AppVersion)
-		logger.Info("工作目录: %s", workDir)
+		logger.Info("==================== worktrackerAI %s 启动 ====================", AppVersion)
+		logger.Info("应用数据目录: %s", appDataDir)
 		logger.Info("数据目录: %s", storageCfg.DataDir)
 	}
 
@@ -141,7 +160,7 @@ func printBanner() {
 	banner := `
 ╔═══════════════════════════════════════════════╗
 ║                                               ║
-║     🚀 WorkTracker AI - 工作追踪工具          ║
+║     🚀 worktrackerAI AI - 工作追踪工具          ║
 ║     版本: ` + AppVersion + `                               ║
 ║                                               ║
 ║     📸 自动截屏 + 🤖 AI 分析 + 📊 时间轴       ║

@@ -1,4 +1,4 @@
-module worktracker
+module WorkTrackerAI
 
 go 1.21
 

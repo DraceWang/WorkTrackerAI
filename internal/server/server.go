@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
-	"worktracker/internal/ai"
-	"worktracker/internal/capture"
-	"worktracker/internal/config"
-	"worktracker/internal/storage"
-	"worktracker/pkg/models"
+	"WorkTrackerAI/internal/ai"
+	"WorkTrackerAI/internal/capture"
+	"WorkTrackerAI/internal/config"
+	"WorkTrackerAI/internal/storage"
+	"WorkTrackerAI/pkg/models"
 
 	"github.com/gin-gonic/gin"
 )

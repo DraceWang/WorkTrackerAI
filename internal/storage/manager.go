@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"worktracker/pkg/models"
+	"WorkTrackerAI/pkg/models"
 
 	_ "modernc.org/sqlite"
 )
