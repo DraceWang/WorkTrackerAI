@@ -9,7 +9,10 @@ require (
 	modernc.org/sqlite v1.28.0
 )
 
-require github.com/kbinani/screenshot v0.0.0-20191211154542-3a185f1ce18f
+require (
+	github.com/kbinani/screenshot v0.0.0-20191211154542-3a185f1ce18f
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
+)
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect

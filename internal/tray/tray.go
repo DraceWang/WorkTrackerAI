@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"WorkTrackerAI/internal/capture"
 	"WorkTrackerAI/internal/scheduler"
@@ -15,10 +16,11 @@ import (
 
 // TrayApp 托盘应用
 type TrayApp struct {
-	captureEng *capture.Engine
-	scheduler  *scheduler.Scheduler
-	webURL     string
-	onExit     func()
+	captureEng      *capture.Engine
+	scheduler       *scheduler.Scheduler
+	webURL          string
+	autoOpenBrowser bool
+	onExit          func()
 }
 
 // NewTrayApp 创建托盘应用
@@ -26,13 +28,15 @@ func NewTrayApp(
 	captureEng *capture.Engine,
 	scheduler *scheduler.Scheduler,
 	webURL string,
+	autoOpenBrowser bool,
 	onExit func(),
 ) *TrayApp {
 	return &TrayApp{
-		captureEng: captureEng,
-		scheduler:  scheduler,
-		webURL:     webURL,
-		onExit:     onExit,
+		captureEng:      captureEng,
+		scheduler:       scheduler,
+		webURL:          webURL,
+		autoOpenBrowser: autoOpenBrowser,
+		onExit:          onExit,
 	}
 }
 
@@ -80,6 +84,15 @@ func (t *TrayApp) onReady() {
 			fmt.Println("✅ 截屏功能已自动启动")
 		}
 	}()
+
+	// 自动打开浏览器（延迟1秒确保Web服务器已完全启动）
+	if t.autoOpenBrowser {
+		go func() {
+			time.Sleep(1 * time.Second)
+			fmt.Printf("🌐 自动打开浏览器: %s\n", t.webURL)
+			t.openBrowser()
+		}()
+	}
 }
 
 // onQuit 托盘退出
@@ -183,4 +196,3 @@ func getIcon() []byte {
 		0x60, 0x82,
 	}
 }
-

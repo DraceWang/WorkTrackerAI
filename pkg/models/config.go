@@ -20,10 +20,15 @@ type AppConfig struct {
 
 // CaptureConfig 截屏配置
 type CaptureConfig struct {
-	Interval        int   `json:"interval"`         // 截屏间隔（秒）
-	SelectedScreens []int `json:"selected_screens"` // 选中的屏幕索引
-	Quality         int   `json:"quality"`          // JPEG 质量 (1-100)
-	Enabled         bool  `json:"enabled"`          // 是否启用截屏
+	Interval        int    `json:"interval"`          // 截屏间隔（秒）
+	SelectedScreens []int  `json:"selected_screens"`  // 选中的屏幕索引
+	Quality         int    `json:"quality"`           // 图片质量 (1-100)
+	Enabled         bool   `json:"enabled"`           // 是否启用截屏
+	MergeScreens    bool   `json:"merge_screens"`     // 是否拼接多屏幕为一张图片
+	ImageFormat     string `json:"image_format"`      // 图片格式: "jpeg" 或 "webp"
+	MaxWidth        int    `json:"max_width"`         // 最大宽度（0表示不限制）
+	MaxHeight       int    `json:"max_height"`        // 最大高度（0表示不限制）
+	EnableResize    bool   `json:"enable_resize"`     // 是否启用智能缩放
 }
 
 // WorkSchedule 工作时间配置
@@ -70,8 +75,13 @@ func DefaultConfig() *AppConfig {
 		Capture: CaptureConfig{
 			Interval:        3,
 			SelectedScreens: []int{0},
-			Quality:         75,
+			Quality:         45,
 			Enabled:         false,
+			MergeScreens:    true,  // 默认拼接多屏幕
+			ImageFormat:     "jpeg", // 默认 JPEG 格式
+			MaxWidth:        0,      // 0 表示不限制
+			MaxHeight:       0,      // 0 表示不限制
+			EnableResize:    false,  // 默认不启用智能缩放
 		},
 		Schedule: WorkSchedule{
 			StartTime:        "09:00",
@@ -91,7 +101,7 @@ func DefaultConfig() *AppConfig {
 			DataDir:         "./data",
 			ScreenshotsDir:  "./data/screenshots",
 			LogsDir:         "./data/logs",
-			RetentionDays:   30,
+			RetentionDays:   14,
 			Compression:     true,
 		},
 		Server: ServerConfig{

@@ -50,3 +50,10 @@ logs/
 
 #package 安装包构建
 package/
+
+#忽略备份和老的文件
+*.bak*
+*.old*
+*.back*
+*.tmp*
+*.before*

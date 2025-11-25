@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -115,6 +115,17 @@
             background: #f8d7da;
         }
 
+        .status-item.clickable {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .status-item.clickable:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
         .button-group {
             display: flex;
             gap: 10px;
@@ -210,7 +221,7 @@
             margin-top: 20px;
         }
 
-        /* 今日工作总结布局：左侧时间轴，右侧今日小结 */
+        /* 今日工作总结布局：左侧时间轴，右侧工作项总结 */
         .summary-layout {
             display: grid;
             grid-template-columns: 2fr 1fr;
@@ -416,6 +427,110 @@
             min-width: 300px;
             z-index: 9999;
             text-align: center;
+            padding: 16px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+            display: none;
+        }
+
+        #message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+
+        #message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #dc3545;
+        }
+        /* 折叠容器样式 */
+        .collapsible-section {
+            margin: 0 0 10px 0;
+        }
+
+        .collapse-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 10px 0;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .collapse-trigger:hover {
+            opacity: 0.8;
+        }
+
+        .collapse-trigger::before,
+        .collapse-trigger::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #ddd 20%, #ddd 80%, transparent);
+        }
+
+        .collapse-trigger-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            margin: 0 15px;
+            background: #f8f9fa;
+            border: 2px solid #ddd;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            color: #667eea;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .collapse-trigger:hover .collapse-trigger-icon {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            transform: scale(1.1);
+        }
+
+        .collapse-trigger-text {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 0 12px;
+            color: #666;
+            font-size: 0.9em;
+            font-weight: 500;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .collapsible-content.expanded {
+            max-height: 500px;
+            opacity: 1;
+        }
+
+        /* 旋转箭头动画 */
+        .collapse-trigger-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .collapse-trigger.expanded .collapse-trigger-icon {
+            transform: rotate(180deg);
+        }
+
+        .collapse-trigger.expanded:hover .collapse-trigger-icon {
+            transform: rotate(180deg) scale(1.1);
         }
     </style>
 </head>
@@ -440,15 +555,15 @@
                     <div class="label">运行状态</div>
                     <div class="value" id="runningStatus">加载中...</div>
                 </div>
-                <div class="status-item">
+                <div class="status-item clickable" onclick="openStorageFolder('today')" title="点击打开今日截图文件夹">
                     <div class="label">今日截图</div>
                     <div class="value" id="todayCaptures">0</div>
                 </div>
-                <div class="status-item">
+                <div class="status-item clickable" onclick="scrollToSummary()" title="点击跳转到今日工作总结">
                     <div class="label">今日分析</div>
                     <div class="value" id="todaySummaries">0</div>
                 </div>
-                <div class="status-item">
+                <div class="status-item clickable" onclick="openStorageFolder('root')" title="点击打开截图存储根目录">
                     <div class="label">存储大小</div>
                     <div class="value" id="storageSize">0 MB</div>
                 </div>
@@ -466,14 +581,19 @@
         <div class="card">
             <h2>⚙️ 配置设置</h2>
             <form id="configForm">
+                <!-- 截图基础设置 -->
                 <div class="form-row">
                     <div class="form-group">
                         <label>截图间隔（秒）</label>
-                        <input type="number" id="captureInterval" min="1" max="60" value="3">
+                        <input type="number" id="captureInterval" min="1" max="60" value="3" onchange="calculateStorageEstimate()">
                     </div>
                     <div class="form-group">
-                        <label>图片质量</label>
-                        <input type="number" id="quality" min="1" max="100" value="75">
+                        <label>图片质量（1-100）</label>
+                        <input type="number" id="quality" min="1" max="100" value="45" onchange="calculateStorageEstimate()">
+                        <small style="color: #666; font-size: 12px;">建议值：低质量20-30，标准质量40-60，高质量70-90</small>
+                        <small id="storageEstimate" style="color: #28a745; font-size: 12px; display: block; margin-top: 4px; font-weight: 500;">
+                            📊 估算：单张 ~100KB，每天 ~200MB
+                        </small>
                     </div>
                     <div class="form-group">
                         <label>分析间隔（分钟）</label>
@@ -481,14 +601,69 @@
                     </div>
                 </div>
 
+                <!-- 高级设置折叠区域 -->
+                <div class="collapsible-section">
+                    <div class="collapse-trigger" onclick="toggleAdvancedSettings()">
+                        <div class="collapse-trigger-icon">▼</div>
+                    </div>
+                    
+                    <div class="collapsible-content" id="advancedSettings">
+                        <!-- 屏幕拼接设置 -->
+                        <div class="form-row" style="margin-top: 20px;">
+                            <div class="form-group" style="display: flex; flex-direction: column; justify-content: center; padding-top: 28px;">
+                                <label style="display: flex; align-items: center; margin: 0 0 4px 0;">
+                                    <input type="checkbox" id="mergeScreens" checked onchange="toggleScreenSelect()" style="width: auto; margin-right: 8px;">
+                                    拼接多屏幕为一张图片
+                                </label>
+                                <small style="color: #666; font-size: 11px; margin-left: 24px;">将多个显示器内容合并为单张截图</small>
+                            </div>
+                            <div class="form-group" id="screenSelectGroup" style="grid-column: span 2;">
+                                <label>截图屏幕</label>
+                                <select id="selectedScreen" onchange="updateScreenResolution()">
+                                    <option value="-1">所有屏幕</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 智能缩放设置 -->
+                        <div class="form-row">
+                            <div class="form-group" style="display: flex; flex-direction: column; justify-content: center; padding-top: 28px;">
+                                <label style="display: flex; align-items: center; margin: 0 0 4px 0;">
+                                    <input type="checkbox" id="enableResize" onchange="toggleResizeOptions()" style="width: auto; margin-right: 8px;">
+                                    启用智能缩放
+                                </label>
+                                <small style="color: #666; font-size: 11px; margin-left: 24px;">降低截图分辨率以节省存储空间</small>
+                            </div>
+                            <div class="form-group">
+                                <label>截屏宽度（像素）</label>
+                                <input type="number" id="maxWidth" min="0" max="7680" value="1920" placeholder="截屏分辨率" onchange="calculateStorageEstimate()">
+                                <small style="color: #666; font-size: 12px;">禁用时显示当前截屏分辨率</small>
+                            </div>
+                            <div class="form-group">
+                                <label>截屏高度（像素）</label>
+                                <input type="number" id="maxHeight" min="0" max="4320" value="1080" placeholder="截屏分辨率" onchange="calculateStorageEstimate()">
+                            </div>
+                        </div>
+
+                        <!-- 分辨率提示 -->
+                        <div class="form-row" id="resolutionWarning" style="display: none;">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <small style="color: #ff6b6b; font-size: 12px; display: block; margin-top: -8px;">
+                                    ⚠️ 检测到当前分辨率较高（大于2K），不建议设置小于0.5倍于当前分辨率的值
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>工作开始时间</label>
-                        <input type="time" id="startTime" value="09:00">
+                        <input type="time" id="startTime" value="09:00" onchange="calculateStorageEstimate()">
                     </div>
                     <div class="form-group">
                         <label>工作结束时间</label>
-                        <input type="time" id="endTime" value="18:00">
+                        <input type="time" id="endTime" value="18:00" onchange="calculateStorageEstimate()">
                     </div>
                     <div class="form-group">
                         <label>数据保留天数</label>
@@ -536,14 +711,14 @@
         </div>
 
         <!-- 工作总结卡片 -->
-        <div class="card">
-            <h2>📝 今日工作总结</h2>
+        <div class="card" id="summaryCard">
+            <h2>📝 工作总结</h2>
             <div class="summary-layout">
                 <div class="timeline" id="summariesTimeline">
                     <div class="loading">加载中...</div>
                 </div>
                 <div class="daily-overview">
-                    <h3>📌 今日小结</h3>
+                    <div class="date-selector" style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;"><label style="font-weight: 500; color: #333;">📅 查看日期：</label><input type="date" id="selectedDate" style="padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 1em;"></div><h3>📌 工作项总结</h3>
                     <ul id="dailySummaryList">
                         <li>加载中...</li>
                     </ul>
@@ -555,6 +730,20 @@
     <script>
         // API 基础路径
         const API_BASE = '/api';
+
+        // 切换高级设置折叠状态
+        function toggleAdvancedSettings() {
+            const content = document.getElementById('advancedSettings');
+            const trigger = document.querySelector('.collapse-trigger');
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                trigger.classList.remove('expanded');
+            } else {
+                content.classList.add('expanded');
+                trigger.classList.add('expanded');
+            }
+        }
 
         // 加载状态
         async function loadStatus() {
@@ -583,6 +772,48 @@
             }
         }
 
+        // 打开截图存储文件夹
+        async function openStorageFolder(target) {
+            try {
+                const targetParam = target || 'root';
+                const response = await fetch(`${API_BASE}/stats/open-folder?target=${targetParam}`, { method: 'POST' });
+                const data = await response.json();
+                const targetName = targetParam === 'today' ? '今日截图文件夹' : '截图存储根目录';
+                showMessage('✅ 已打开' + targetName, 'success');
+            } catch (error) {
+                showMessage('❌ 打开文件夹失败: ' + error.message, 'error');
+            }
+        }
+
+        // 平滑滚动到工作总结区域
+        function scrollToSummary() {
+            const summaryCard = document.getElementById('summaryCard');
+            if (summaryCard) {
+                summaryCard.scrollIntoView({ 
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        }
+
+        // 加载屏幕列表
+        async function loadScreens() {
+            try {
+                const response = await fetch(`${API_BASE}/screens`);
+                const screens = await response.json();
+                const select = document.getElementById('selectedScreen');
+
+                if (screens && screens.length > 0) {
+                    select.innerHTML = screens.map(s => {
+                        const primary = s.is_primary ? ' (主屏幕)' : '';
+                        return `<option value="${s.index}">${s.name} - ${s.width}x${s.height}${primary}</option>`;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('加载屏幕列表失败:', error);
+            }
+        }
+
         // 加载配置
         async function loadConfig() {
             try {
@@ -598,10 +829,31 @@
                 document.getElementById('aiProvider').value = data.ai.provider;
                 document.getElementById('baseURL').value = data.ai.base_url || '';
 
+                // 设置拼接多屏幕勾选框
+                const mergeScreens = data.capture.merge_screens !== undefined ? data.capture.merge_screens : true;
+                document.getElementById('mergeScreens').checked = mergeScreens;
+                toggleScreenSelect(); // 更新屏幕选择显示状态
+
+                // 设置智能缩放选项
+                const enableResize = data.capture.enable_resize !== undefined ? data.capture.enable_resize : false;
+                document.getElementById('enableResize').checked = enableResize;
+                if (data.capture.max_width !== undefined) {
+                    document.getElementById('maxWidth').value = data.capture.max_width;
+                }
+                if (data.capture.max_height !== undefined) {
+                    document.getElementById('maxHeight').value = data.capture.max_height;
+                }
+                toggleResizeOptions(); // 更新缩放选项显示状态
+
+                // 设置选中的屏幕
+                if (data.capture.selected_screens && data.capture.selected_screens.length > 0) {
+                    document.getElementById('selectedScreen').value = data.capture.selected_screens[0];
+                }
+
                 // 设置模型选项
                 const modelSelect = document.getElementById('aiModel');
                 if (data.ai.model) {
-                    // 如果已有模型配置，添加到选项并选中
+                    // 如果已有模型配置，添加到选项���选中
                     modelSelect.innerHTML = `<option value="${data.ai.model}">${data.ai.model}</option>`;
                     modelSelect.value = data.ai.model;
                 }
@@ -609,15 +861,235 @@
                 if (data.ai.api_key) {
                     document.getElementById('apiKey').value = data.ai.api_key;
                 }
+                // 初始化屏幕分辨率信息
+                await updateScreenResolution();
             } catch (error) {
                 console.error('加载配置失败:', error);
             }
         }
 
-        // 加载今日总结（左侧时间轴 + 右侧今日小结）
-        async function loadSummaries() {
+        // 全局变量：存储屏幕信息
+        let screenInfo = [];
+        let currentResolution = { width: 0, height: 0 };
+
+        // 获取并更新屏幕分辨率
+        async function updateScreenResolution() {
             try {
-                const response = await fetch(`${API_BASE}/summaries`);
+                // 获取屏幕信息
+                const response = await fetch(`${API_BASE}/screens`);
+                screenInfo = await response.json();
+
+                // 填充屏幕选择器
+                const screenSelect = document.getElementById('selectedScreen');
+                const currentValue = screenSelect.value;
+
+                // 重新生成选项
+                screenSelect.innerHTML = '<option value="-1">所有屏幕</option>';
+                screenInfo.forEach((screen, i) => {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = `${screen.name} (${screen.width}x${screen.height})${screen.is_primary ? ' - 主屏幕' : ''}`;
+                    screenSelect.appendChild(option);
+                });
+
+                // 恢复之前选择的值
+                if (currentValue && screenSelect.querySelector(`option[value="${currentValue}"]`)) {
+                    screenSelect.value = currentValue;
+                }
+
+                const mergeScreens = document.getElementById('mergeScreens').checked;
+
+                if (mergeScreens) {
+                    // 拼接模式：计算所有屏幕的总分辨率
+                    let totalWidth = 0;
+                    let maxHeight = 0;
+
+                    screenInfo.forEach((screen) => {
+                        totalWidth += screen.width;
+                        maxHeight = Math.max(maxHeight, screen.height);
+                    });
+
+                    currentResolution.width = totalWidth;
+                    currentResolution.height = maxHeight;
+                } else {
+                    // 单屏模式：使用选中屏幕的分辨率
+                    const selectedIndex = parseInt(screenSelect.value);
+                    if (selectedIndex >= 0 && selectedIndex < screenInfo.length) {
+                        const screen = screenInfo[selectedIndex];
+                        currentResolution.width = screen.width;
+                        currentResolution.height = screen.height;
+                    } else {
+                        // 默认使用第一个屏幕
+                        if (screenInfo.length > 0) {
+                            currentResolution.width = screenInfo[0].width;
+                            currentResolution.height = screenInfo[0].height;
+                        }
+                    }
+                }
+
+                // 更新智能缩放选项
+                toggleResizeOptions();
+
+            } catch (error) {
+                console.error('获取屏幕信息失败:', error);
+            }
+        }
+
+        // 切换屏幕选择显示/隐藏
+        function toggleScreenSelect() {
+            const mergeScreens = document.getElementById('mergeScreens').checked;
+            const screenSelect = document.getElementById('selectedScreen');
+
+            if (mergeScreens) {
+                // 拼接模式：显示"所有屏幕"并禁用
+                screenSelect.disabled = true;
+                screenSelect.style.backgroundColor = '#f5f5f5';
+                screenSelect.value = '-1'; // "所有屏幕"
+            } else {
+                // 单屏模式：启用选择
+                screenSelect.disabled = false;
+                screenSelect.style.backgroundColor = '';
+                // 如果当前是"所有屏幕"，切换到第一个实际屏幕
+                if (screenSelect.value === '-1' && screenInfo.length > 0) {
+                    screenSelect.value = '0';
+                }
+            }
+
+            // 更新分辨率
+            updateScreenResolution();
+        }
+
+        // 切换智能缩放选项（控制输入框启用/禁用和2K提示）
+        function toggleResizeOptions() {
+            const enableResize = document.getElementById('enableResize').checked;
+            const maxWidthInput = document.getElementById('maxWidth');
+            const maxHeightInput = document.getElementById('maxHeight');
+            const warningDiv = document.getElementById('resolutionWarning');
+
+            if (enableResize) {
+                // 启用输入框
+                maxWidthInput.disabled = false;
+                maxHeightInput.disabled = false;
+                maxWidthInput.style.backgroundColor = '';
+                maxHeightInput.style.backgroundColor = '';
+
+                // 如果输入框为空或0，设置为当前截屏分辨率
+                if (!maxWidthInput.value || maxWidthInput.value == '0') {
+                    maxWidthInput.value = currentResolution.width || 1920;
+                }
+                if (!maxHeightInput.value || maxHeightInput.value == '0') {
+                    maxHeightInput.value = currentResolution.height || 1080;
+                }
+
+                // 检查是否大于2K（2560x1440）
+                const is2K = currentResolution.width >= 2560 || currentResolution.height >= 1440;
+                if (is2K && warningDiv) {
+                    warningDiv.style.display = 'block';
+                }
+            } else {
+                // 禁用输入框并显示当前截屏分辨率（拼接后的）
+                maxWidthInput.disabled = true;
+                maxHeightInput.disabled = true;
+                maxWidthInput.style.backgroundColor = '#f5f5f5';
+                maxHeightInput.style.backgroundColor = '#f5f5f5';
+
+                // 显示当前截屏分辨率
+                maxWidthInput.value = currentResolution.width || 1920;
+                maxHeightInput.value = currentResolution.height || 1080;
+                maxWidthInput.placeholder = '截屏分辨率';
+                maxHeightInput.placeholder = '截屏分辨率';
+
+                // 隐藏警告
+                if (warningDiv) {
+                    warningDiv.style.display = 'none';
+                }
+            }
+
+            // 更新存储空间估算
+            calculateStorageEstimate();
+        }
+
+        // 计算存储空间估算
+        function calculateStorageEstimate() {
+            const width = parseInt(document.getElementById('maxWidth').value) || 1920;
+            const height = parseInt(document.getElementById('maxHeight').value) || 1080;
+            const quality = parseInt(document.getElementById('quality').value) || 45;
+            const interval = parseInt(document.getElementById('captureInterval').value) || 3;
+
+            // 估算单张图片大小（基于经验公式）
+            // JPEG文件大小 ≈ (width × height × quality × 0.00001) KB
+            const pixelCount = width * height;
+            let singleFileKB = (pixelCount * quality * 0.00001);
+
+            // 根据质量调整系数
+            if (quality < 30) {
+                singleFileKB *= 0.6;  // 低质量压缩率更高
+            } else if (quality > 70) {
+                singleFileKB *= 1.4;  // 高质量文件更大
+            }
+
+            // 计算工作时长（根据配置的工作开始和结束时间）
+            const startTime = document.getElementById('startTime').value || '09:00';
+            const endTime = document.getElementById('endTime').value || '18:00';
+
+            // 解析时间字符串为小时数
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+
+            // 计算工作时长（小时）
+            let workHours = (endHour + endMin / 60) - (startHour + startMin / 60);
+            if (workHours < 0) {
+                workHours += 24; // 处理跨午夜的情况
+            }
+
+            // 计算一天的截图数量
+            const screenshotsPerDay = (workHours * 3600) / interval;
+            const dailyStorageMB = (singleFileKB * screenshotsPerDay) / 1024;
+
+            // 格式化显示
+            let singleFileStr, dailyStorageStr;
+
+            if (singleFileKB < 1024) {
+                singleFileStr = Math.round(singleFileKB) + 'KB';
+            } else {
+                singleFileStr = (singleFileKB / 1024).toFixed(1) + 'MB';
+            }
+
+            if (dailyStorageMB < 1024) {
+                dailyStorageStr = Math.round(dailyStorageMB) + 'MB';
+            } else {
+                dailyStorageStr = (dailyStorageMB / 1024).toFixed(1) + 'GB';
+            }
+
+            // 更新显示
+            const estimateEl = document.getElementById('storageEstimate');
+            if (estimateEl) {
+                estimateEl.textContent = `📊 估算：单张 ~${singleFileStr}，每天 ~${dailyStorageStr} (${Math.round(screenshotsPerDay)}张，工作${workHours.toFixed(1)}小时)`;
+            }
+        }
+
+        // 当前选择的日期（用于跨天检测）
+        let currentLoadedDate = null;
+
+        // 加载指定日期的总结（左侧时间轴 + 右侧工作项总结）
+        async function loadSummaries(dateStr) {
+            // 如果没有指定日期，使用今天
+            if (!dateStr) {
+                const today = new Date();
+                dateStr = today.toISOString().split('T')[0];
+            }
+
+            // 更新当前加载的日期
+            currentLoadedDate = dateStr;
+
+            // 更新日期选择器的值
+            const dateInput = document.getElementById('selectedDate');
+            if (dateInput) {
+                dateInput.value = dateStr;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/summaries?date=${dateStr}`);
                 const data = await response.json();
 
                 const timelineContainer = document.getElementById('summariesTimeline');
@@ -652,7 +1124,7 @@
                 }
 
                 if (dailyList) {
-                    // 「今日小结」为按天聚合的工作要点列表：
+                    // 「工作项总结」为按天聚合的工作要点列表：
                     // 1) 过滤空段（“暂无截屏内容”）；
                     // 2) 将各时间段 summary 中的 1.xxx;2.xxx;... 拆分为单条工作项；
                     // 3) 对相同内容去重；
@@ -728,10 +1200,11 @@
         // 立即截图
         async function captureNow() {
             try {
+                const screenIndex = parseInt(document.getElementById('selectedScreen').value) || 0;
                 const response = await fetch(`${API_BASE}/screenshots/capture`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ screen_index: 0 })
+                    body: JSON.stringify({ screen_index: screenIndex })
                 });
                 const data = await response.json();
                 showMessage('截图成功!', 'success');
@@ -887,9 +1360,14 @@
             const config = {
                 capture: {
                     interval: parseInt(document.getElementById('captureInterval').value),
-                    selected_screens: [0],
+                    selected_screens: [parseInt(document.getElementById('selectedScreen').value)],
                     quality: parseInt(document.getElementById('quality').value),
-                    enabled: true
+                    enabled: true,
+                    merge_screens: document.getElementById('mergeScreens').checked,
+                    image_format: "jpeg", // 暂时固定为 JPEG
+                    max_width: parseInt(document.getElementById('maxWidth').value) || 0,
+                    max_height: parseInt(document.getElementById('maxHeight').value) || 0,
+                    enable_resize: document.getElementById('enableResize').checked
                 },
                 schedule: {
                     start_time: document.getElementById('startTime').value,
@@ -910,6 +1388,8 @@
                 },
                 storage: {
                     data_dir: "./data",
+                    screenshots_dir: "data/screenshots",
+                    logs_dir: "data/logs",
                     retention_days: parseInt(document.getElementById('retentionDays').value),
                     compression: true
                 },
@@ -942,11 +1422,15 @@
             container.className = type;
             container.textContent = msg;
             container.style.display = 'block';
+
+            // 添加进入动画
+            container.style.animation = 'slideIn 0.3s ease-out';
+
             setTimeout(() => {
                 container.style.display = 'none';
                 container.textContent = '';
                 container.className = '';
-            }, 5000); // 增加到5秒,更明显
+            }, 5000);
         }
 
         // 格式化时间
@@ -959,12 +1443,34 @@
         loadVersion();
         loadStatus();
         loadStorageStats();
+        loadScreens();
         loadConfig();
         loadSummaries();
+
+        // 监听拼接多屏幕勾选框变化
+        document.getElementById('mergeScreens').addEventListener('change', toggleScreenSelect);
 
         // 定时刷新状态
         setInterval(loadStatus, 5000);
         setInterval(loadStorageStats, 30000);
+
+        // 日期选择器事件监听
+        document.getElementById('selectedDate').addEventListener('change', function() {
+            const selectedDate = this.value;
+            if (selectedDate) {
+                loadSummaries(selectedDate);
+            }
+        });
+
+        // 跨天检测：每分钟检查一次日期是否变化
+        function checkDateChange() {
+            const today = new Date().toISOString().split('T')[0];
+            if (currentLoadedDate && currentLoadedDate !== today) {
+                console.log('检测到日期变化，自动刷新总结');
+                loadSummaries(); // 加载今天的总结
+            }
+        }
+        setInterval(checkDateChange, 60000); // 每60秒检查一次
 
         // 加载版本信息
         async function loadVersion() {

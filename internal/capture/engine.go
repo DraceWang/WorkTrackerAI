@@ -15,9 +15,11 @@ import (
 	"WorkTrackerAI/internal/storage"
 	"WorkTrackerAI/pkg/logger"
 	"WorkTrackerAI/pkg/models"
+	"WorkTrackerAI/pkg/screenstate"
 	"WorkTrackerAI/pkg/utils"
 
 	"github.com/kbinani/screenshot"
+	"github.com/nfnt/resize"
 )
 
 // Engine 截屏引擎
@@ -141,11 +143,30 @@ func (e *Engine) shouldCapture() bool {
 
 // captureAll 截取所有配置的屏幕
 func (e *Engine) captureAll() error {
+	// 检测屏幕状态：如果屏幕被锁定或屏保运行中，跳过截屏
+	if !screenstate.IsScreenActive() {
+		logger.Debug("屏幕未激活（可能被锁定或屏保运行中），跳过截屏")
+		return nil
+	}
+
 	cfg := e.configMgr.GetCapture()
 
-	for _, screenIndex := range cfg.SelectedScreens {
-		if err := e.captureScreen(screenIndex); err != nil {
-			return fmt.Errorf("failed to capture screen %d: %w", screenIndex, err)
+	// 如果启用多屏幕拼接，则拼接所有屏幕
+	if cfg.MergeScreens {
+		n := screenshot.NumActiveDisplays()
+		if n > 1 {
+			return e.captureMergedScreens()
+		}
+		// 只有一个屏幕时，正常截取
+		if err := e.captureScreen(0); err != nil {
+			return fmt.Errorf("failed to capture screen 0: %w", err)
+		}
+	} else {
+		// 不拼接时，按配置截取选定的屏幕
+		for _, screenIndex := range cfg.SelectedScreens {
+			if err := e.captureScreen(screenIndex); err != nil {
+				return fmt.Errorf("failed to capture screen %d: %w", screenIndex, err)
+			}
 		}
 	}
 
@@ -153,7 +174,82 @@ func (e *Engine) captureAll() error {
 	e.lastCapture = time.Now()
 	e.mu.Unlock()
 
-	logger.Debug("截屏完成,共 %d 个屏幕", len(cfg.SelectedScreens))
+	logger.Debug("截屏完成")
+	return nil
+}
+
+// captureMergedScreens 截取并拼接所有屏幕
+func (e *Engine) captureMergedScreens() error {
+	n := screenshot.NumActiveDisplays()
+	if n == 0 {
+		return fmt.Errorf("no active displays found")
+	}
+
+	// 1. 获取所有屏幕的边界和截图
+	type screenCapture struct {
+		bounds image.Rectangle
+		img    *image.RGBA
+	}
+	captures := make([]screenCapture, n)
+
+	// 计算整体画布的边界
+	var minX, minY, maxX, maxY int
+	for i := 0; i < n; i++ {
+		bounds := screenshot.GetDisplayBounds(i)
+		img, err := screenshot.CaptureRect(bounds)
+		if err != nil {
+			return fmt.Errorf("failed to capture screen %d: %w", i, err)
+		}
+
+		captures[i] = screenCapture{bounds: bounds, img: img}
+
+		// 更新整体边界
+		if i == 0 {
+			minX, minY = bounds.Min.X, bounds.Min.Y
+			maxX, maxY = bounds.Max.X, bounds.Max.Y
+		} else {
+			if bounds.Min.X < minX {
+				minX = bounds.Min.X
+			}
+			if bounds.Min.Y < minY {
+				minY = bounds.Min.Y
+			}
+			if bounds.Max.X > maxX {
+				maxX = bounds.Max.X
+			}
+			if bounds.Max.Y > maxY {
+				maxY = bounds.Max.Y
+			}
+		}
+	}
+
+	// 2. 创建拼接画布
+	canvasWidth := maxX - minX
+	canvasHeight := maxY - minY
+	merged := image.NewRGBA(image.Rect(0, 0, canvasWidth, canvasHeight))
+
+	// 3. 将各屏幕图像绘制到画布上
+	for i, cap := range captures {
+		// 计算在画布上的位置
+		offsetX := cap.bounds.Min.X - minX
+		offsetY := cap.bounds.Min.Y - minY
+
+		// 绘制图像
+		for y := 0; y < cap.img.Bounds().Dy(); y++ {
+			for x := 0; x < cap.img.Bounds().Dx(); x++ {
+				merged.Set(offsetX+x, offsetY+y, cap.img.At(x, y))
+			}
+		}
+		logger.Debug("已拼接屏幕 %d (位置: %d, %d)", i, offsetX, offsetY)
+	}
+
+	// 4. 保存拼接后的图像
+	mergedBounds := image.Rect(minX, minY, maxX, maxY)
+	if err := e.saveScreenshot(merged, -1, mergedBounds); err != nil {
+		return fmt.Errorf("failed to save merged screenshot: %w", err)
+	}
+
+	logger.Info("多屏幕拼接完成：%d 个屏幕，分辨率 %dx%d", n, canvasWidth, canvasHeight)
 	return nil
 }
 
@@ -178,19 +274,58 @@ func (e *Engine) captureScreen(screenIndex int) error {
 	return e.saveScreenshot(img, screenIndex, bounds)
 }
 
-// saveScreenshot 保存截图
+// saveScreenshot 保存截图（支持智能压缩和缩放）
 func (e *Engine) saveScreenshot(img *image.RGBA, screenIndex int, bounds image.Rectangle) error {
 	cfg := e.configMgr.GetCapture()
 	storageCfg := e.configMgr.GetStorage()
 
-	// 生成文件名
-	now := time.Now()
-	filename := fmt.Sprintf("screenshot_%d_%s.jpg",
-		screenIndex,
-		now.Format("20060102_150405"),
-	)
+	// 1. 智能缩放（如果启用）
+	processedImg := image.Image(img)
+	finalWidth := bounds.Dx()
+	finalHeight := bounds.Dy()
 
-	// 确保目录存在 - 使用配置的截图目录
+	if cfg.EnableResize && (cfg.MaxWidth > 0 || cfg.MaxHeight > 0) {
+		width := bounds.Dx()
+		height := bounds.Dy()
+
+		// 计算是否需要缩放
+		needResize := false
+		scaleWidth, scaleHeight := width, height
+
+		if cfg.MaxWidth > 0 && width > cfg.MaxWidth {
+			scaleWidth = cfg.MaxWidth
+			scaleHeight = height * cfg.MaxWidth / width
+			needResize = true
+		}
+
+		if cfg.MaxHeight > 0 && scaleHeight > cfg.MaxHeight {
+			scaleHeight = cfg.MaxHeight
+			scaleWidth = width * cfg.MaxHeight / height
+			needResize = true
+		}
+
+		if needResize {
+			// 使用 Lanczos3 算法进行高质量缩放
+			processedImg = resize.Resize(uint(scaleWidth), uint(scaleHeight), img, resize.Lanczos3)
+			finalWidth = scaleWidth
+			finalHeight = scaleHeight
+			logger.Debug("图像缩放: %dx%d -> %dx%d", width, height, scaleWidth, scaleHeight)
+		}
+	}
+
+	// 2. 确定文件扩展名（暂时只支持 JPEG）
+	fileExt := ".jpg"
+
+	// 3. 生成文件名
+	now := time.Now()
+	var filename string
+	if screenIndex == -1 {
+		filename = fmt.Sprintf("screenshot_merged_%s%s", now.Format("20060102_150405"), fileExt)
+	} else {
+		filename = fmt.Sprintf("screenshot_%d_%s%s", screenIndex, now.Format("20060102_150405"), fileExt)
+	}
+
+	// 4. 确保目录存在
 	screenshotsDir := storageCfg.ScreenshotsDir
 	if screenshotsDir == "" {
 		screenshotsDir = filepath.Join(storageCfg.DataDir, "screenshots")
@@ -202,25 +337,28 @@ func (e *Engine) saveScreenshot(img *image.RGBA, screenIndex int, bounds image.R
 
 	filePath := filepath.Join(dateDir, filename)
 
-	// 压缩为 JPEG
+	// 5. JPEG 压缩编码
 	var buf bytes.Buffer
-	opt := jpeg.Options{Quality: cfg.Quality}
-	if err := jpeg.Encode(&buf, img, &opt); err != nil {
-		return fmt.Errorf("failed to encode JPEG: %w", err)
+	encodeErr := jpeg.Encode(&buf, processedImg, &jpeg.Options{
+		Quality: cfg.Quality,
+	})
+
+	if encodeErr != nil {
+		return fmt.Errorf("failed to encode JPEG: %w", encodeErr)
 	}
 
-	// 写入文件
+	// 6. 写入文件
 	if err := os.WriteFile(filePath, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	// 保存到数据库
+	// 7. 保存到数据库
 	ss := &models.Screenshot{
 		Timestamp:   now,
 		ScreenIndex: screenIndex,
 		FilePath:    filePath,
 		FileSize:    int64(buf.Len()),
-		Resolution:  fmt.Sprintf("%dx%d", bounds.Dx(), bounds.Dy()),
+		Resolution:  fmt.Sprintf("%dx%d", finalWidth, finalHeight),
 		Analyzed:    false,
 		CreatedAt:   now,
 	}
@@ -266,12 +404,14 @@ func GetScreens() []models.ScreenInfo {
 
 	for i := 0; i < n; i++ {
 		bounds := screenshot.GetDisplayBounds(i)
+		// 主屏幕的左上角坐标为 (0, 0)
+		isPrimary := bounds.Min.X == 0 && bounds.Min.Y == 0
 		screens[i] = models.ScreenInfo{
 			Index:     i,
 			Name:      fmt.Sprintf("Display %d", i+1),
 			Width:     bounds.Dx(),
 			Height:    bounds.Dy(),
-			IsPrimary: i == 0, // 假设第一个是主屏幕
+			IsPrimary: isPrimary,
 		}
 	}
 

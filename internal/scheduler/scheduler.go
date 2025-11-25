@@ -101,25 +101,33 @@ func (s *Scheduler) IsRunning() bool {
 	return s.running
 }
 
-// runAnalysis 执行 AI 分析
+// runAnalysis 执行 AI 分析（使用整点边界）
 func (s *Scheduler) runAnalysis() {
 	fmt.Println("🤖 开始 AI 分析任务...")
 
-	schedule := s.configMgr.GetSchedule()
-	interval := schedule.AnalysisInterval
+	// 使用整点边界：从上一个整点到当前整点
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
+	prevHour := currentHour.Add(-1 * time.Hour)
 
-	// 分析过去 N 分钟的截图
-	timeLocal,_ := time.LoadLocation("Asia/Shanghai")
-	end := time.Now().UTC().In(timeLocal)
-	start := end.Add(-time.Duration(interval) * time.Minute)
+	// 检查该时间段是否已存在总结，避免重复分析
+	hasSummary, err := s.storageMgr.HasWorkSummaryForRange(prevHour, currentHour)
+	if err != nil {
+		fmt.Printf("⚠️ 检查历史总结失败: %v\n", err)
+		return
+	}
+	if hasSummary {
+		fmt.Printf("ℹ️ 时间段 %s - %s 已存在总结，跳过分析\n", prevHour.Format("15:04"), currentHour.Format("15:04"))
+		return
+	}
 
-	summary, err := s.aiAnalyzer.AnalyzePeriod(start, end)
+	summary, err := s.aiAnalyzer.AnalyzePeriod(prevHour, currentHour)
 	if err != nil {
 		fmt.Printf("❌ AI 分析失败: %v\n", err)
 		return
 	}
 
-	fmt.Printf("✅ AI 分析完成: %s\n", summary.Summary)
+	fmt.Printf("✅ AI 分析完成: %s - %s: %s\n", prevHour.Format("15:04"), currentHour.Format("15:04"), summary.Summary)
 }
 
 // runCleanup 执行清理任务

@@ -19,7 +19,7 @@ import (
 
 const (
 	AppName    = "WorkTrackerAI"
-	AppVersion = "1.0.0"
+	AppVersion = "1.48.2"
 )
 
 // getAppDataDir 获取应用数据目录
@@ -128,20 +128,13 @@ func main() {
 	serverCfg := configMgr.GetServer()
 	webURL := fmt.Sprintf("http://%s:%d", serverCfg.Host, serverCfg.Port)
 
-	// 自动打开浏览器
-	if serverCfg.AutoOpenBrowser {
-		fmt.Printf("🌐 正在打开浏览器: %s\n", webURL)
-		// 延迟一下确保服务器已启动
-		// time.Sleep(1 * time.Second)
-		// 浏览器会在托盘菜单点击时打开
-	}
-
 	// 初始化系统托盘
 	fmt.Println("🎯 启动系统托盘...")
 	trayApp := tray.NewTrayApp(
 		captureEng,
 		sched,
 		webURL,
+		serverCfg.AutoOpenBrowser, // 传递自动打开浏览器配置
 		func() {
 			// 清理资源
 			fmt.Println("📦 正在清理资源...")

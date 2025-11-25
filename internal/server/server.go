@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"WorkTrackerAI/internal/ai"
@@ -93,6 +97,7 @@ func (s *Server) setupRoutes() {
 		// 统计数据
 		api.GET("/stats/today", s.handleGetTodayStats)
 		api.GET("/stats/storage", s.handleGetStorageStats)
+		api.POST("/stats/open-folder", s.handleOpenStorageFolder)
 
 		// 服务控制
 		api.POST("/service/start", s.handleStartService)
@@ -279,11 +284,12 @@ func (s *Server) handleGetSummariesByDate(c *gin.Context) {
 }
 
 // handleAnalyzeNow 立即触发 AI 分析（按整点分段，空段留空）
-// 新行为：
+// 行为：
 //   1. 获取当天截图的最早和最晚时间；
-//   2. 按配置的 analysis_interval（例如 60 分钟）从最早截图往后分段，但分段的结束边界对齐整点；
-//   3. 如果某段没有截图，则不调用 AI，直接写入空占位（summary="暂无截屏内容"）；
-//   4. 最后一段以真实最晚截图为结束时间。
+//   2. 第一段：从最早截图时间 -> 下一个整点；
+//   3. 中间段：整点 -> 整点；
+//   4. 最后一段：整点 -> 最后截图时间（或当前时间）；
+//   5. 如果某段没有截图，则不调用 AI，直接写入空占位。
 func (s *Server) handleAnalyzeNow(c *gin.Context) {
 	var req struct {
 		StartTime string `json:"start_time"`
@@ -308,48 +314,33 @@ func (s *Server) handleAnalyzeNow(c *gin.Context) {
 	firstTs := screenshots[0].Timestamp
 	lastTs := screenshots[len(screenshots)-1].Timestamp
 
-	// 2. 按整点生成分段
-	schedule := s.configMgr.GetSchedule()
-	intervalMinutes := schedule.AnalysisInterval
-	if intervalMinutes <= 0 {
-		intervalMinutes = 60
-	}
-
-	// 第一段：从 firstTs 到下一个整点（或 lastTs）
+	// 2. 计算整点边界的时间段
 	segments := []struct {
 		Start, End time.Time
-		HasData bool
+		HasData    bool
 	}{}
 
-	// 当前段起始
+	// 计算第一个整点边界（向上取整到下一个整点）
+	firstHourEnd := time.Date(
+		firstTs.Year(), firstTs.Month(), firstTs.Day(),
+		firstTs.Hour()+1, 0, 0, 0, firstTs.Location(),
+	)
+
+	// 第一段：从第一张截图到下一个整点
 	currentStart := firstTs
+	currentEnd := firstHourEnd
+
+	// 如果 lastTs 在第一个整点之前，整个数据只有一段
+	if lastTs.Before(firstHourEnd) || lastTs.Equal(firstHourEnd) {
+		currentEnd = lastTs
+	}
 
 	for {
-		// 下一个整点（intervalMinutes 分钟）
-		nextHour := time.Date(
-			currentStart.Year(), currentStart.Month(), currentStart.Day(),
-			currentStart.Hour(), 0, 0, 0, currentStart.Location(),
-		).Add(time.Duration(intervalMinutes) * time.Minute)
-
-		// 如果 firstTs 在整点上，则下一个整点 = firstTs + interval
-		if currentStart.Equal(nextHour) || currentStart.After(nextHour) {
-			nextHour = currentStart.Add(time.Duration(intervalMinutes) * time.Minute)
-		}
-
-		// 确定本段的结束时间
-		var currentEnd time.Time
-		if nextHour.After(lastTs) || nextHour.Equal(lastTs) {
-			// 最后一段，用 lastTs
-			currentEnd = lastTs
-		} else {
-			currentEnd = nextHour
-		}
-
 		// 检查该段是否有截图
 		hasData := false
 		for _, ss := range screenshots {
 			if (ss.Timestamp.Equal(currentStart) || ss.Timestamp.After(currentStart)) &&
-				(ss.Timestamp.Before(currentEnd) || ss.Timestamp.Equal(currentEnd)) {
+				ss.Timestamp.Before(currentEnd) {
 				hasData = true
 				break
 			}
@@ -364,13 +355,20 @@ func (s *Server) handleAnalyzeNow(c *gin.Context) {
 			HasData: hasData,
 		})
 
-		// 如果达到最后一张截图，结束
+		// 如果已达到或超过最后截图时间，结束
 		if currentEnd.Equal(lastTs) || currentEnd.After(lastTs) {
 			break
 		}
 
-		// 下一段从整点开始
+		// 下一段：从当前结束时间（整点）开始
 		currentStart = currentEnd
+		// 下一个结束时间：下一个整点
+		currentEnd = currentStart.Add(1 * time.Hour)
+
+		// 如果下一个整点超过 lastTs，则用 lastTs 作为结束
+		if currentEnd.After(lastTs) {
+			currentEnd = lastTs
+		}
 	}
 
 	// 3. 清空当天已有的总结
@@ -439,6 +437,67 @@ func (s *Server) handleGetStorageStats(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
+// handleOpenStorageFolder 打开截图存储文件夹
+func (s *Server) handleOpenStorageFolder(c *gin.Context) {
+	storageCfg := s.configMgr.GetStorage()
+	screenshotsDir := storageCfg.ScreenshotsDir
+
+	// 转换为绝对路径
+	absPath, err := filepath.Abs(screenshotsDir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取绝对路径失败: " + err.Error()})
+		return
+	}
+
+	// 获取目标参数：today（今日目录）或 root（根目录）
+	target := c.Query("target")
+	var targetDir string
+
+	if target == "today" {
+		// 强制打开今日目录
+		today := time.Now().Format("2006-01-02")
+		targetDir = filepath.Join(absPath, today)
+	} else {
+		// 打开截图根目录（data/screenshots）
+		targetDir = absPath
+	}
+
+	// 确保目录存在
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建目录失败: " + err.Error()})
+		return
+	}
+
+	fmt.Printf("📂 打开文件夹 (target=%s): %s\n", target, targetDir)
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		// Windows 下直接打开目录（不使用 /select, 以避免仅选中目录而不打开）
+		// 使用 explorer 直接打开目录会自动切换到前台
+		cmd = exec.Command("explorer", targetDir)
+	case "darwin":
+		cmd = exec.Command("open", targetDir)
+	case "linux":
+		cmd = exec.Command("xdg-open", targetDir)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的操作系统"})
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "打开文件夹失败: " + err.Error(),
+			"path":  targetDir,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "已打开截图存储文件夹",
+		"path":    targetDir,
+	})
+}
 // handleStartService 启动服务
 func (s *Server) handleStartService(c *gin.Context) {
 	// 自动启用截屏配置
