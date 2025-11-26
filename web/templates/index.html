@@ -532,6 +532,52 @@
         .collapse-trigger.expanded:hover .collapse-trigger-icon {
             transform: rotate(180deg) scale(1.1);
         }
+
+        /* 工作日选择器样式 */
+        .weekday-selector {
+            display: flex;
+            column-gap: 20.5px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .weekday-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .weekday-item:hover {
+            background: #e9ecef;
+            border-color: #667eea;
+        }
+
+        .weekday-item input[type="checkbox"] {
+            width: auto !important;
+            margin-right: 6px;
+            cursor: pointer;
+        }
+
+        .weekday-item input[type="checkbox"]:checked + span {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .weekday-item:has(input:checked) {
+            background: #e8eeff;
+            border-color: #667eea;
+        }
+
+        .weekday-item span {
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -671,6 +717,48 @@
                     </div>
                 </div>
 
+                <!-- 工作日选择 -->
+                <div class="form-row">
+                    <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
+                        <label style="display: block; margin-bottom: 8px;">工作日选择</label>
+                        <small style="color: #666; font-size: 12px; display: block; line-height: 1.5;">
+                            选择每周哪些天要自动工作（包括自动截图和AI分析）
+                        </small>
+                    </div>
+                    <div class="form-group" style="grid-column: span 2; display: flex; align-items: center;">
+                        <div class="weekday-selector" style="width: 100%;">
+                            <label class="weekday-item">
+                                <input type="checkbox" name="workday" value="1" checked>
+                                <span>周一</span>
+                            </label>
+                            <label class="weekday-item">
+                                <input type="checkbox" name="workday" value="2" checked>
+                                <span>周二</span>
+                            </label>
+                            <label class="weekday-item">
+                                <input type="checkbox" name="workday" value="3" checked>
+                                <span>周三</span>
+                            </label>
+                            <label class="weekday-item">
+                                <input type="checkbox" name="workday" value="4" checked>
+                                <span>周四</span>
+                            </label>
+                            <label class="weekday-item">
+                                <input type="checkbox" name="workday" value="5" checked>
+                                <span>周五</span>
+                            </label>
+                            <label class="weekday-item">
+                                <input type="checkbox" name="workday" value="6">
+                                <span>周六</span>
+                            </label>
+                            <label class="weekday-item">
+                                <input type="checkbox" name="workday" value="0">
+                                <span>周日</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>AI 提供商</label>
@@ -685,7 +773,7 @@
                     </div>
                     <div class="form-group">
                         <label>Base URL</label>
-                        <input type="text" id="baseURL" placeholder="如: https://api.openai.com/v1">
+                        <input type="text" id="baseURL" placeholder="https://api.openai.com/v1，供应商自定义必填">
                     </div>
                     <div class="form-group">
                         <label>API 密钥</label>
@@ -826,6 +914,15 @@
                 document.getElementById('startTime').value = data.schedule.start_time;
                 document.getElementById('endTime').value = data.schedule.end_time;
                 document.getElementById('retentionDays').value = data.storage.retention_days;
+
+                // 加载工作日配置
+                const workDays = data.schedule.work_days || [1, 2, 3, 4, 5];
+                const workdayCheckboxes = document.querySelectorAll('input[name="workday"]');
+                workdayCheckboxes.forEach(checkbox => {
+                    const day = parseInt(checkbox.value);
+                    checkbox.checked = workDays.includes(day);
+                });
+
                 document.getElementById('aiProvider').value = data.ai.provider;
                 document.getElementById('baseURL').value = data.ai.base_url || '';
 
@@ -1357,6 +1454,12 @@
                 return;
             }
 
+            // 读取选中的工作日
+            const selectedWorkDays = [];
+            document.querySelectorAll('input[name="workday"]:checked').forEach(checkbox => {
+                selectedWorkDays.push(parseInt(checkbox.value));
+            });
+
             const config = {
                 capture: {
                     interval: parseInt(document.getElementById('captureInterval').value),
@@ -1372,7 +1475,7 @@
                 schedule: {
                     start_time: document.getElementById('startTime').value,
                     end_time: document.getElementById('endTime').value,
-                    work_days: [1, 2, 3, 4, 5],
+                    work_days: selectedWorkDays,
                     analysis_interval: parseInt(document.getElementById('analysisInterval').value),
                     enabled: true
                 },

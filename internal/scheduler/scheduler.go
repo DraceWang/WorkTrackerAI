@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +12,26 @@ import (
 
 	"github.com/robfig/cron/v3"
 )
+
+// workDaysToCron 将工作日数组转换为cron表达式的星期部分
+// workDays: [0,1,2,3,4,5,6] 其中0=周日，1=周一，...，6=周六
+// 返回: "0,1,2,3,4,5,6" 或 "*" (如果全选)
+func workDaysToCron(workDays []int) string {
+	if len(workDays) == 0 {
+		return "*" // 空数组视为全选
+	}
+	if len(workDays) == 7 {
+		return "*" // 全部7天
+	}
+	
+	// 转换为字符串数组并排序
+	dayStrs := make([]string, len(workDays))
+	for i, day := range workDays {
+		dayStrs[i] = fmt.Sprintf("%d", day)
+	}
+	
+	return strings.Join(dayStrs, ",")
+}
 
 // CaptureEngine 定义截图引擎接口，避免循环依赖
 type CaptureEngine interface {
@@ -251,9 +272,10 @@ func (s *Scheduler) addDailyReportJob() error {
 	hour := reportTime.Hour()
 	minute := reportTime.Minute()
 
-	// 创建 cron 表达式：分 时 * * 1-5 (周一到周五)
-	// 例如：17:50 -> "50 17 * * 1-5"
-	cronExpr := fmt.Sprintf("%d %d * * 1-5", minute, hour)
+	// 创建 cron 表达式，使用配置的工作日
+	// 例如：17:50 工作日1,2,3,4,5 -> "50 17 * * 1,2,3,4,5"
+	weekDays := workDaysToCron(schedule.WorkDays)
+	cronExpr := fmt.Sprintf("%d %d * * %s", minute, hour, weekDays)
 
 	_, err = s.cron.AddFunc(cronExpr, s.runDailyReport)
 	if err != nil {
@@ -319,9 +341,10 @@ func (s *Scheduler) addAutoStartCaptureJob() error {
 	hour := startTime.Hour()
 	minute := startTime.Minute()
 
-	// 创建 cron 表达式：分 时 * * 1-5 (周一到周五)
-	// 例如：09:00 -> "0 9 * * 1-5"
-	cronExpr := fmt.Sprintf("%d %d * * 1-5", minute, hour)
+	// 创建 cron 表达式，使用配置的工作日
+	// 例如：09:00 工作日1,2,3,4,5 -> "0 9 * * 1,2,3,4,5"
+	weekDays := workDaysToCron(schedule.WorkDays)
+	cronExpr := fmt.Sprintf("%d %d * * %s", minute, hour, weekDays)
 
 	_, err = s.cron.AddFunc(cronExpr, s.autoStartCapture)
 	if err != nil {
