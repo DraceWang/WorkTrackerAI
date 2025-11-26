@@ -12,12 +12,20 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// CaptureEngine 定义截图引擎接口，避免循环依赖
+type CaptureEngine interface {
+	Start() error
+	Stop() error
+	IsRunning() bool
+}
+
 // Scheduler 任务调度器
 type Scheduler struct {
 	cron       *cron.Cron
 	configMgr  *config.Manager
 	storageMgr *storage.Manager
 	aiAnalyzer *ai.Analyzer
+	captureEng CaptureEngine
 	mu         sync.Mutex
 	running    bool
 }
@@ -27,12 +35,14 @@ func NewScheduler(
 	configMgr *config.Manager,
 	storageMgr *storage.Manager,
 	aiAnalyzer *ai.Analyzer,
+	captureEng CaptureEngine,
 ) *Scheduler {
 	return &Scheduler{
 		cron:       cron.New(),
 		configMgr:  configMgr,
 		storageMgr: storageMgr,
 		aiAnalyzer: aiAnalyzer,
+		captureEng: captureEng,
 	}
 }
 
@@ -295,3 +305,49 @@ func (s *Scheduler) runDailyReport() {
 	fmt.Printf("⏱️  工作时长：%d小时%d分钟\n", hours, minutes)
 }
 
+
+// addAutoStartCaptureJob 添加工作开始时间自动启动截图的任务
+func (s *Scheduler) addAutoStartCaptureJob() error {
+	schedule := s.configMgr.GetSchedule()
+
+	// 解析工作开始时间
+	startTime, err := time.Parse("15:04", schedule.StartTime)
+	if err != nil {
+		return fmt.Errorf("无效的开始时间格式: %w", err)
+	}
+
+	hour := startTime.Hour()
+	minute := startTime.Minute()
+
+	// 创建 cron 表达式：分 时 * * 1-5 (周一到周五)
+	// 例如：09:00 -> "0 9 * * 1-5"
+	cronExpr := fmt.Sprintf("%d %d * * 1-5", minute, hour)
+
+	_, err = s.cron.AddFunc(cronExpr, s.autoStartCapture)
+	if err != nil {
+		return fmt.Errorf("failed to add auto-start capture job: %w", err)
+	}
+
+	fmt.Printf("⏰ 工作时间自动启动截图任务已添加 (工作日 %02d:%02d 自动启动)\n", hour, minute)
+	return nil
+}
+
+// autoStartCapture 自动启动截图（在工作开始时间）
+func (s *Scheduler) autoStartCapture() {
+	fmt.Println("⏰ 到达工作开始时间，检查是否需要自动启动截图...")
+
+	// 检查截图引擎是否已经在运行
+	if s.captureEng.IsRunning() {
+		fmt.Println("ℹ️ 截图引擎已在运行中，无需启动")
+		return
+	}
+
+	// 启动截图引擎
+	fmt.Println("🚀 自动启动截图引擎...")
+	if err := s.captureEng.Start(); err != nil {
+		fmt.Printf("❌ 自动启动截图引擎失败: %v\n", err)
+		return
+	}
+
+	fmt.Println("✅ 截图引擎已自动启动")
+}

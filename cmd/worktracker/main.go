@@ -19,7 +19,7 @@ import (
 
 const (
 	AppName    = "WorkTrackerAI"
-	AppVersion = "1.48.2"
+	AppVersion = "1.48.3"
 )
 
 // getAppDataDir 获取应用数据目录
@@ -109,7 +109,7 @@ func main() {
 	fmt.Println("✅ AI 分析器初始化完成")
 
 	// 初始化任务调度器
-	sched := scheduler.NewScheduler(configMgr, storageMgr, aiAnalyzer)
+	sched := scheduler.NewScheduler(configMgr, storageMgr, aiAnalyzer, captureEng)
 	if err := sched.Start(); err != nil {
 		log.Fatalf("❌ 启动任务调度器失败: %v", err)
 	}
