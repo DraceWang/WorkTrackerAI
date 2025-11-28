@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WorkTracker AI - 工作追踪工具</title>
-    <link rel="icon" type="image/x-icon" href="/asserts/WorkTraceAI_16x16.ico">
+    <link rel="icon" type="image/x-icon" href="/asserts/WorkTraceAI.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/asserts/WorkTraceAI.ico">
     <style>
         * {
             margin: 0;
@@ -1222,11 +1223,36 @@
 
                 if (dailyList) {
                     // 「工作项总结」为按天聚合的工作要点列表：
-                    // 1) 过滤空段（“暂无截屏内容”）；
+                    // 1) 过滤空段（"暂无截屏内容"及变体）；
                     // 2) 将各时间段 summary 中的 1.xxx;2.xxx;... 拆分为单条工作项；
-                    // 3) 对相同内容去重；
-                    // 4) 重新按 1.,2.,3. 进行编号输出，不显示时间段。
-                    const nonEmptySummaries = sorted.filter(s => s.summary && s.summary !== '暂无截屏内容');
+                    // 3) 过滤掉包含"xx"占位符的模板式虚假工作项；
+                    // 4) 对相同内容去重；
+                    // 5) 重新按 1.,2.,3. 进行编号输出，不显示时间段。
+
+                    // 判断是否为空内容或无效内容的helper函数
+                    const isEmptyOrInvalid = (summary) => {
+                        if (!summary) return true;
+                        const s = String(summary).trim();
+                        // 空字符串
+                        if (!s) return true;
+                        // 明确标记为空的内容
+                        if (s === '暂无截屏内容' || s === '暂无内容' || s === '无内容') return true;
+                        // 只包含空白、换行、标点的内容
+                        if (/^[\s\n\r;；.,。]+$/.test(s)) return true;
+                        return false;
+                    };
+
+                    // 判断是否为模板式虚假工作项
+                    const isTemplateItem = (text) => {
+                        if (!text) return true;
+                        // 包含"xx"占位符（如"进行xx开发"、"解决了xx问题"）
+                        if (/xx|XX/.test(text)) return true;
+                        // 过于模糊的描述
+                        if (/^(进行|完成|处理|查看|浏览|使用)[^具体内容]*$/.test(text)) return true;
+                        return false;
+                    };
+
+                    const nonEmptySummaries = sorted.filter(s => !isEmptyOrInvalid(s.summary));
 
                     if (nonEmptySummaries.length === 0) {
                         dailyList.innerHTML = '<li>暂无工作总结</li>';
@@ -1239,10 +1265,12 @@
                                 let text = part.trim();
                                 if (!text) return;
                                 // 去掉前缀编号，如 "1.", "2.", "1、" 等
-                                text = text.replace(/^\s*\d+[\.、．\)]\s*/, '');
-                                // 去掉开头的“本时段/该时段/在本时间段内”等措辞，使其更像整天的工作项
+                                text = text.replace(/^\s*\d+[\\.、．\\)]\s*/, '');
+                                // 去掉开头的"本时段/该时段/在本时间段内"等措辞，使其更像整天的工作项
                                 text = text.replace(/^(本时段|该时段|在本时间段内|在此时间段内|在该时间段内)\s*/, '');
                                 if (!text) return;
+                                // 过滤掉模板式虚假工作项
+                                if (isTemplateItem(text)) return;
                                 itemSet.add(text);
                             });
                         });
@@ -1257,6 +1285,7 @@
                         }
                     }
                 }
+
             } catch (error) {
                 console.error('加载总结失败:', error);
                 const timelineContainer = document.getElementById('summariesTimeline');

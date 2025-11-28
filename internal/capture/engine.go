@@ -144,10 +144,23 @@ func (e *Engine) shouldCapture() bool {
 // captureAll 截取所有配置的屏幕
 func (e *Engine) captureAll() error {
 	// 检测屏幕状态：如果屏幕被锁定或屏保运行中，跳过截屏
-	if !screenstate.IsScreenActive() {
-		logger.Debug("屏幕未激活（可能被锁定或屏保运行中），跳过截屏")
+	active, screensaverRunning, screenLocked := screenstate.GetScreenStateInfo()
+	
+	// 记录详细的屏幕状态信息
+	logger.Info("屏幕状态检测 - 活跃:%v, 屏保运行:%v, 屏幕锁定:%v", active, screensaverRunning, screenLocked)
+	
+	if !active {
+		if screensaverRunning {
+			logger.Info("⏸️  屏保正在运行，跳过本次截屏")
+		} else if screenLocked {
+			logger.Info("🔒 屏幕已锁定，跳过本次截屏")
+		} else {
+			logger.Info("⏸️  屏幕未激活，跳过本次截屏")
+		}
 		return nil
 	}
+	
+	logger.Debug("✅ 屏幕状态正常，开始截屏")
 
 	cfg := e.configMgr.GetCapture()
 
