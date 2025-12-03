@@ -19,7 +19,7 @@ import (
 
 const (
 	AppName    = "WorkTrackerAI"
-	AppVersion = "1.48.5"
+	AppVersion = "1.49.3"
 )
 
 // getAppDataDir 获取应用数据目录

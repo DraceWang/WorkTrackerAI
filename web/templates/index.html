@@ -854,8 +854,18 @@
             try {
                 const response = await fetch(`${API_BASE}/stats/storage`);
                 const data = await response.json();
-                const sizeMB = (data.total_size / 1024 / 1024).toFixed(2);
-                document.getElementById('storageSize').textContent = `${sizeMB} MB`;
+                const sizeMB = data.total_size / 1024 / 1024;
+
+                // 当超过1000MB时转换为GB显示
+                let sizeText;
+                if (sizeMB >= 1000) {
+                    const sizeGB = (sizeMB / 1024).toFixed(2);
+                    sizeText = `${sizeGB} GB`;
+                } else {
+                    sizeText = `${sizeMB.toFixed(2)} MB`;
+                }
+
+                document.getElementById('storageSize').textContent = sizeText;
             } catch (error) {
                 console.error('加载存储统计失败:', error);
             }
@@ -1411,6 +1421,7 @@
                 showMessage('✅ 分析完成！已生成工作总结', 'success');
                 await loadSummaries();
                 await loadStatus();
+                await loadStorageStats(); // 刷新存储大小
             } catch (error) {
                 showMessage('❌ 分析失败: ' + error.message, 'error');
             } finally {

@@ -92,6 +92,16 @@ func (s *Scheduler) Start() error {
 		fmt.Printf("⚠️ 添加每日日报任务失败: %v\n", err)
 	}
 
+	// 添加工作开始时间自动启动截图任务
+	if err := s.addAutoStartCaptureJob(); err != nil {
+		fmt.Printf("⚠️ 添加自动启动截图任务失败: %v\n", err)
+	}
+
+	// 添加工作结束时间自动停止截图任务
+	if err := s.addAutoStopCaptureJob(); err != nil {
+		fmt.Printf("⚠️ 添加自动停止截图任务失败: %v\n", err)
+	}
+
 	// 添加清理任务（每天凌晨 3 点）
 	_, err = s.cron.AddFunc("0 3 * * *", s.runCleanup)
 	if err != nil {
@@ -373,4 +383,51 @@ func (s *Scheduler) autoStartCapture() {
 	}
 
 	fmt.Println("✅ 截图引擎已自动启动")
+}
+
+// addAutoStopCaptureJob 添加工作结束时间自动停止截图的任务
+func (s *Scheduler) addAutoStopCaptureJob() error {
+	schedule := s.configMgr.GetSchedule()
+
+	// 解析工作结束时间
+	endTime, err := time.Parse("15:04", schedule.EndTime)
+	if err != nil {
+		return fmt.Errorf("无效的结束时间格式: %w", err)
+	}
+
+	hour := endTime.Hour()
+	minute := endTime.Minute()
+
+	// 创建 cron 表达式，使用配置的工作日
+	// 例如：18:00 工作日1,2,3,4,5 -> "0 18 * * 1,2,3,4,5"
+	weekDays := workDaysToCron(schedule.WorkDays)
+	cronExpr := fmt.Sprintf("%d %d * * %s", minute, hour, weekDays)
+
+	_, err = s.cron.AddFunc(cronExpr, s.autoStopCapture)
+	if err != nil {
+		return fmt.Errorf("failed to add auto-stop capture job: %w", err)
+	}
+
+	fmt.Printf("⏰ 工作时间自动停止截图任务已添加 (工作日 %02d:%02d 自动停止)\n", hour, minute)
+	return nil
+}
+
+// autoStopCapture 自动停止截图（在工作结束时间）
+func (s *Scheduler) autoStopCapture() {
+	fmt.Println("⏰ 到达工作结束时间，检查是否需要自动停止截图...")
+
+	// 检查截图引擎是否在运行
+	if !s.captureEng.IsRunning() {
+		fmt.Println("ℹ️ 截图引擎未运行，无需停止")
+		return
+	}
+
+	// 停止截图引擎
+	fmt.Println("🛑 自动停止截图引擎...")
+	if err := s.captureEng.Stop(); err != nil {
+		fmt.Printf("❌ 自动停止截图引擎失败: %v\n", err)
+		return
+	}
+
+	fmt.Println("✅ 截图引擎已自动停止")
 }

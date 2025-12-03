@@ -339,15 +339,14 @@ func (m *Manager) DeleteWorkSummariesForDate(date time.Time) error {
 	return nil
 }
 
-// GetStorageStats 获取存储统计信息
+// GetStorageStats 获取存储统计信息（计算真实文件系统大小）
 func (m *Manager) GetStorageStats() (*models.StorageStats, error) {
 	stats := &models.StorageStats{}
 
-	// 获取截图总数和总大小
+	// 获取截图总数和时间范围
 	query := `
 		SELECT
 			COUNT(*) as total,
-			COALESCE(SUM(file_size), 0) as total_size,
 			MIN(date(timestamp)) as oldest,
 			MAX(date(timestamp)) as newest
 		FROM screenshots
@@ -356,7 +355,6 @@ func (m *Manager) GetStorageStats() (*models.StorageStats, error) {
 	var oldest, newest sql.NullString
 	err := m.db.QueryRow(query).Scan(
 		&stats.TotalScreenshots,
-		&stats.TotalSize,
 		&oldest,
 		&newest,
 	)
@@ -372,7 +370,43 @@ func (m *Manager) GetStorageStats() (*models.StorageStats, error) {
 		stats.NewestDate = newest.String
 	}
 
+	// 计算真实文件系统的数据目录大小
+	dataDir := filepath.Dir(m.dbPath) // 获取数据库所在目录（即 data 目录）
+	totalSize, err := calculateDirSize(dataDir)
+	if err != nil {
+		fmt.Printf("⚠️ 计算目录大小失败: %v\n", err)
+		// 发生错误时不影响其他统计数据，只将大小设为 0
+		stats.TotalSize = 0
+	} else {
+		stats.TotalSize = totalSize
+	}
+
 	return stats, nil
+}
+
+// calculateDirSize 递归计算目录大小
+func calculateDirSize(dirPath string) (int64, error) {
+	var totalSize int64
+
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// 跳过无法访问的文件/目录，继续遍历
+			return nil
+		}
+
+		// 只统计文件大小，跳过目录
+		if !info.IsDir() {
+			totalSize += info.Size()
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to walk directory: %w", err)
+	}
+
+	return totalSize, nil
 }
 
 // GetTodayStats 获取今日统计
